@@ -61,7 +61,7 @@ export default function Lobby({ playerName, setRoomId }) {
 
   return (
     <div style={{ padding: "40px", fontSize: "24px" }}>
-      <h2>Spirit Stone Lobby</h2>
+      <h2>Batu Seremban Lobby</h2>
       <button onClick={createRoom}>Create Room</button>
       <hr />
       <input

@@ -10,7 +10,7 @@ function App() {
   if (!nameConfirmed) {
     return (
       <div style={{ padding: "40px", fontSize: "24px" }}>
-        <h1>Spirit Stone</h1>
+        <h1>Batu Seremban</h1>
         <input 
           placeholder="Enter your name" 
           value={playerName}
