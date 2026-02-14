@@ -2,6 +2,60 @@ import { useState, useEffect, useRef } from "react";
 import { ref, onValue, update } from "firebase/database";
 import { db, auth } from "../firebase";
 
+// 🎵 Simple sound generator
+const useSound = () => {
+  const ctxRef = useRef(null);
+
+  if (!ctxRef.current) {
+    ctxRef.current = new (window.AudioContext || window.webkitAudioContext)();
+  }
+
+  const play = (type = "toss") => {
+    const ctx = ctxRef.current;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.connect(g);
+    g.connect(ctx.destination);
+
+    // Frequency and type for each sound
+    switch (type) {
+      case "toss":
+        o.frequency.value = 600;
+        o.type = "sine";
+        g.gain.value = 0.2;
+        break;
+      case "pick":
+        o.frequency.value = 800;
+        o.type = "triangle";
+        g.gain.value = 0.2;
+        break;
+      case "catch":
+        o.frequency.value = 1000;
+        o.type = "square";
+        g.gain.value = 0.25;
+        break;
+      case "fail":
+        o.frequency.value = 300;
+        o.type = "sawtooth";
+        g.gain.value = 0.3;
+        break;
+      case "bg":
+        o.frequency.value = 200;
+        o.type = "sine";
+        g.gain.value = 0.05;
+        break;
+      default:
+        o.frequency.value = 500;
+        g.gain.value = 0.2;
+    }
+
+    o.start();
+    o.stop(ctx.currentTime + 0.15); // short sound
+  };
+
+  return { play };
+};
+
 export default function GameRoom({ playerName, roomId }) {
   const playerId = auth.currentUser.uid;
 
@@ -9,14 +63,17 @@ export default function GameRoom({ playerName, roomId }) {
   const [airStone, setAirStone] = useState(null);
   const [pickedGroup, setPickedGroup] = useState([]);
   const [remainingStones, setRemainingStones] = useState([0, 1, 2, 3, 4]);
-  const [collectedStones, setCollectedStones] = useState([]); // Stones collected in hand
+  const [collectedStones, setCollectedStones] = useState([]);
   const [stonePositions, setStonePositions] = useState([]);
   const [fail, setFail] = useState(false);
   const [isFalling, setIsFalling] = useState(false);
+  const [soundOn, setSoundOn] = useState(true);
 
   const timerRef = useRef(null);
 
-  // 🔥 Generate random stone positions WITHOUT overlap
+  const { play } = useSound();
+
+  // 🔥 Generate random stone positions
   const generatePositions = () => {
     const positions = [];
     const tableWidth = 500;
@@ -45,7 +102,6 @@ export default function GameRoom({ playerName, roomId }) {
     setStonePositions(positions);
   };
 
-  // generate once at start
   useEffect(() => {
     generatePositions();
   }, []);
@@ -78,18 +134,14 @@ export default function GameRoom({ playerName, roomId }) {
   const playerData = players[playerId] || {};
   const level = playerData.level || 1;
 
-  // ✅ Determine required picks based on level
-  // Need at least (level + 1) stones: 1 to toss + level to pick
-  // EXCEPT when there's only 1 stone left - just toss and catch it
-  let required;
   const stonesOnTable = remainingStones.length;
-  
+  let required;
   if (stonesOnTable === 1) {
-    required = 0; // Last stone - just toss and catch
+    required = 0;
   } else if (stonesOnTable < level + 1) {
-    required = -1; // Cannot play - not enough stones
+    required = -1;
   } else {
-    required = level; // Pick exactly 'level' number of stones
+    required = level;
   }
 
   const isMyTurn = gameState.gameState.turn === playerId;
@@ -104,46 +156,42 @@ export default function GameRoom({ playerName, roomId }) {
 
   // 🎯 THROW
   const throwStone = (id) => {
-    if (!isMyTurn) return;
-    if (airStone !== null) return;
-    if (required < 0) return; // Cannot play if not enough stones
+    if (!isMyTurn || airStone !== null || required < 0) return;
+
+    // Background "music" on first toss
+    if (soundOn) play("bg");
 
     setAirStone(id);
     setFail(false);
     setPickedGroup([]);
     setIsFalling(false);
 
-    setTimeout(() => setIsFalling(true), 750);
+    if (soundOn) play("toss");
+    if (navigator.vibrate) navigator.vibrate(50);
 
+    setTimeout(() => setIsFalling(true), 750);
     timerRef.current = setTimeout(handleFail, 1500);
   };
 
   // 🎯 PICK
   const pickStone = (id) => {
-    if (!isMyTurn) return;
-    if (airStone === null) return;
-    if (id === airStone) return;
-    if (!remainingStones.includes(id)) return;
-    if (pickedGroup.includes(id)) return;
-    if (pickedGroup.length >= required) return;
+    if (!isMyTurn || airStone === null || id === airStone || pickedGroup.includes(id) || pickedGroup.length >= required) return;
 
     setPickedGroup((prev) => [...prev, id]);
+    if (soundOn) play("pick");
   };
 
   // 🎯 CATCH
   const catchStone = () => {
-    if (!isMyTurn) return;
-    if (airStone === null) return;
-    // Allow catching with required picks (including 0 for last stone)
-    if (pickedGroup.length !== required) return;
+    if (!isMyTurn || airStone === null || pickedGroup.length !== required) return;
 
     clearTimeout(timerRef.current);
     setIsFalling(false);
 
-    // ✅ Add ONLY the tossed stone to collected pile permanently
+    if (soundOn) play("catch");
+    if (navigator.vibrate) navigator.vibrate(80);
+
     const newCollected = [...collectedStones, airStone];
-    
-    // ✅ Temporarily remove picked stones from table (they're in your hand)
     const tempRemaining = remainingStones.filter(
       (stone) => !pickedGroup.includes(stone) && stone !== airStone
     );
@@ -151,8 +199,6 @@ export default function GameRoom({ playerName, roomId }) {
     setCollectedStones(newCollected);
     setAirStone(null);
 
-    // ✅ Check if level is complete
-    // Level complete when all 5 stones are collected OR no stones left on table
     if (newCollected.length === 5 || tempRemaining.length === 0) {
       const nextLevel = level >= 5 ? 1 : level + 1;
 
@@ -164,21 +210,17 @@ export default function GameRoom({ playerName, roomId }) {
         [playerId]: (scores[playerId] || 0) + 1,
       });
 
-      // Reset for next level
       setPickedGroup([]);
       setRemainingStones([0, 1, 2, 3, 4]);
       setCollectedStones([]);
       generatePositions();
     } else {
-      // ✅ Put picked stones back on table for next round
       setRemainingStones(tempRemaining);
-      
       setTimeout(() => {
         setRemainingStones((prev) => [...prev, ...pickedGroup]);
         setPickedGroup([]);
       }, 500);
     }
-    // ✅ Player keeps turn until fail
   };
 
   // ❌ FAIL
@@ -186,20 +228,20 @@ export default function GameRoom({ playerName, roomId }) {
     setFail(true);
     setIsFalling(true);
 
+    if (soundOn) play("fail");
+    if (navigator.vibrate) navigator.vibrate([100, 50, 100]);
+
     setTimeout(() => {
       setAirStone(null);
       setPickedGroup([]);
       setIsFalling(false);
       setFail(false);
 
-      // Put any collected stones back
       if (collectedStones.length > 0) {
         setRemainingStones([0, 1, 2, 3, 4]);
         setCollectedStones([]);
         generatePositions();
       }
-
-      // Switch turn on fail
       switchTurn();
     }, 800);
   };
@@ -207,34 +249,53 @@ export default function GameRoom({ playerName, roomId }) {
   return (
     <div
       style={{
-        background: fail ? "#400" : "#111",
-        color: "white",
+        background: fail ? "#7B241C" : "#F3E5AB",
+        color: "#4B3621",
         minHeight: "100vh",
         padding: "30px",
         textAlign: "center",
+        fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif",
         transition: "0.2s",
       }}
     >
-      <h2>🪨 Spirit Stone (Batu Seremban)</h2>
+      <h2 style={{ fontFamily: "'Courier New', Courier, monospace" }}>🪨 Batu Seremban</h2>
       <h3>
         Level {level} — Pick {required >= 0 ? required : "N/A"}
       </h3>
       <h4>{isMyTurn ? "🟢 Your Turn" : "🔴 Waiting"}</h4>
-      <p style={{ fontSize: "14px", color: "#aaa" }}>
+      <p style={{ fontSize: "14px", color: "#6B4C3B" }}>
         Stones on table: {remainingStones.length} | In hand: {collectedStones.length}
       </p>
 
+      {/* 🔊 Sound toggle */}
+      <button
+        onClick={() => setSoundOn((prev) => !prev)}
+        style={{
+          padding: "6px 12px",
+          marginBottom: "20px",
+          cursor: "pointer",
+          borderRadius: "8px",
+          border: "none",
+          background: "#D2691E",
+          color: "#fff",
+        }}
+      >
+        {soundOn ? "🔊 Sound On" : "🔇 Sound Off"}
+      </button>
+
       {fail && <h2 style={{ color: "red" }}>FAILED!</h2>}
 
+      {/* Table */}
       <div
         style={{
           margin: "40px auto",
           width: "500px",
           height: "200px",
-          background: "#5c3b1e",
+          background: "#8B4513",
           borderRadius: "20px",
           position: "relative",
           boxShadow: "0 10px 40px rgba(0,0,0,0.5)",
+          border: "5px solid #A0522D",
         }}
       >
         {remainingStones.map((id) => {
@@ -265,12 +326,13 @@ export default function GameRoom({ playerName, roomId }) {
                 borderRadius: "50%",
                 background:
                   airStone === id
-                    ? "orange"
+                    ? "#FFA500"
                     : pickedGroup.includes(id)
-                    ? "gold"
-                    : "#c08457",
+                    ? "#FFD700"
+                    : "#CD853F",
                 cursor: isMyTurn && required >= 0 ? "pointer" : "default",
-                transition: "bottom 0.75s ease",
+                transition: "bottom 0.75s ease, background 0.3s ease",
+                boxShadow: "2px 2px 5px rgba(0,0,0,0.5)",
               }}
             />
           );
@@ -293,6 +355,7 @@ export default function GameRoom({ playerName, roomId }) {
         )}
       </div>
 
+      {/* Scores */}
       <h3>🏆 Scores</h3>
       <ul style={{ listStyle: "none", padding: 0 }}>
         {Object.entries(scores).map(([id, score]) => (
