@@ -384,7 +384,7 @@ export default function GameRoom({ playerName, roomId }) {
 
     return (
       <div style={{ background: "#F3E5AB", color:"#4B3621", minHeight:"100vh", padding:"30px", textAlign:"center", fontFamily:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}>
-        <h2 style={{ fontFamily:"'Courier New', Courier, monospace" }}>🪨 Batu Seremban</h2>
+        <h2 style={{ fontFamily:"'Courier New', Courier, monospace" }}>🪨 Crazy Batu Seremban</h2>
         <h3>👀 Watching {otherPlayerData.name || "Opponent"}'s Turn</h3>
         <h4 style={{color:"#D2691E"}}>Level {otherLevel}</h4>
         <p style={{ fontSize:"14px", color:"#6B4C3B" }}>
@@ -554,6 +554,10 @@ export default function GameRoom({ playerName, roomId }) {
     if (newCollected.length===5 || tempRemaining.length===0) {
       // Check if player completed level 4 (game winner!)
       if (level >= 4) {
+        // Increment score for completing level 4
+        update(ref(db, `rooms/${roomId}/gameState/scores`), {[playerId]:(scores[playerId]||0)+1});
+        
+        // Set winner and end game
         update(ref(db, `rooms/${roomId}/gameState`), {
           winner: playerId,
           gameEnded: true,
@@ -607,7 +611,7 @@ export default function GameRoom({ playerName, roomId }) {
       animation: interruptEffect === "earthquake" ? "earthquake 0.5s" : "none"
     }}>
 
-      <h2 style={{ fontFamily:"'Courier New', Courier, monospace" }}>🪨 Batu Seremban</h2>
+      <h2 style={{ fontFamily:"'Courier New', Courier, monospace" }}>🪨 Crazy Batu Seremban</h2>
       <h3>Level {level} — Pick {required>=0?required:"N/A"}</h3>
       <h4>{isMyTurn?"🟢 Your Turn":"🔴 Waiting"}</h4>
       <p style={{ fontSize:"14px", color:"#6B4C3B" }}>Stones on table: {remainingStones.length} | In hand: {collectedStones.length}</p>
