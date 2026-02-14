@@ -334,7 +334,7 @@ export default function GameRoom({ playerName, roomId }) {
                   fontWeight: id === winnerId ? "bold" : "normal",
                   color: id === winnerId ? "#FFD700" : "white"
                 }}>
-                  {id === playerId ? `${playerName} (You)` : players[id]?.name || id}: {score} levels
+                  {id === playerId ? `${playerName} (You)` : players[id]?.name || id}: {score} 
                   {id === winnerId && " 👑"}
                 </li>
               ))}
