@@ -1,0 +1,84 @@
+.stone {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 30% 30%, #f5d6a0, #b5723f);
+  box-shadow: 0 5px 10px rgba(0,0,0,0.3);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: transform 0.3s, opacity 0.3s;
+  position: relative;
+}
+
+.stone.collected {
+  transform: scale(0.7) translateY(-50px);
+  opacity: 0.3;
+}
+
+.stone.tossing {
+  animation: tossToHandArc 0.8s forwards;
+}
+
+@keyframes tossToHandArc {
+  0% { transform: translate(0,0) scale(1); }
+  30% { transform: translate(20px,-80px) scale(1.2); }
+  60% { transform: translate(50px,-120px) scale(1.1); }
+  100% { transform: translate(var(--hand-x), var(--hand-y)) scale(0.5); opacity: 0; }
+}
+
+.basket {
+  position: absolute;
+  bottom: 0;
+  left: 50%;
+  width: 100px;
+  height: 50px;
+  background: #d2691e;
+  border-radius: 0 0 50px 50px;
+  transform: translateX(-50%);
+}
+
+.hand {
+  font-size: 50px;
+  position: absolute;
+  pointer-events: auto;
+  cursor: pointer;
+  z-index: 100;
+  transition: left 0.3s, top 0.3s, transform 0.3s;
+}
+
+.hand.pick {
+  transform: scale(1.2) rotate(-15deg);
+}
+
+.score-popup {
+  position: absolute;
+  top: 50px;
+  left: 50%;
+  transform: translateX(-50%);
+  font-size: 30px;
+  color: gold;
+  font-weight: bold;
+  animation: popupAnim 1s ease-out forwards;
+}
+
+@keyframes popupAnim {
+  0% { transform: translateX(-50%) translateY(0); opacity: 1; }
+  100% { transform: translateX(-50%) translateY(-50px); opacity: 0; }
+}
+
+/* CHAOS MODE */
+.chaos {
+  background: #6a00f4;
+  color: white;
+}
+
+.chaos .stone {
+  animation: shake 0.3s infinite alternate;
+}
+
+@keyframes shake {
+  0% { transform: translateX(0); }
+  100% { transform: translateX(5px); }
+}
