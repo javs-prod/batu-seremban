@@ -163,7 +163,8 @@ export default function Lobby({ playerName, setRoomId }) {
               background: "#FFF",
               boxSizing: "border-box",
               touchAction: "manipulation",
-              WebkitTapHighlightColor: "transparent"
+              WebkitTapHighlightColor: "transparent",
+              color: "#000"
             }}
           />
           <button 

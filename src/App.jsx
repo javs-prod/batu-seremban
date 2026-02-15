@@ -63,7 +63,9 @@ function App() {
               textAlign: "center",
               marginBottom: "20px",
               background: "#FFF",
-              boxSizing: "border-box"
+              boxSizing: "border-box",
+              color: "#000",
+              fontWeight: "500"
             }}
           />
           

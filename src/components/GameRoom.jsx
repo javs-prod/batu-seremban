@@ -72,32 +72,35 @@ export default function GameRoom({ playerName, roomId }) {
   const [soundOn, setSoundOn] = useState(true);
   const [interruptEffect, setInterruptEffect] = useState(null);
   const [teleportingStone, setTeleportingStone] = useState(null);
+  const [earthquakeCooldown, setEarthquakeCooldown] = useState(false);
+  const [teleportCooldown, setTeleportCooldown] = useState(false);
 
   const timerRef = useRef(null);
   const lastSyncedStateRef = useRef(null);
   const lastInterruptTimestampRef = useRef(0);
   const { play } = useSound();
 
-  // 🔹 Generate random stone positions
+  // 🔹 Generate random stone positions (responsive)
   const generatePositions = () => {
     const positions = [];
-    const tableWidth = 500;
-    const tableHeight = 200;
-    const stoneWidth = 40;
-    const minGap = 50;
+    // Use percentage-based positioning instead of fixed pixels
+    const stoneSize = 8; // percentage of table width
+    const minGap = 12; // minimum gap as percentage
 
     for(let i=0;i<5;i++){
       let left, bottom, tries=0;
       do {
-        left = Math.floor(Math.random()*(tableWidth-stoneWidth-20))+10;
-        bottom = 20 + Math.floor(Math.random() * 100); // Much more vertical variation (20-120px)
+        // Generate positions as percentages (5% to 85% to keep stones inside)
+        left = 5 + Math.floor(Math.random() * (85 - stoneSize));
+        // Bottom position: 10% to 50% of table height
+        bottom = 10 + Math.floor(Math.random() * 40);
         tries++;
       } while(
         positions.some(s=>Math.abs(s.left-left)<minGap && Math.abs(s.baseBottom-bottom)<minGap) && 
         tries<100
       );
 
-      positions.push({id:i,left,baseBottom:bottom});
+      positions.push({id:i, left, baseBottom:bottom});
     }
     setStonePositions(positions);
   };
@@ -106,10 +109,23 @@ export default function GameRoom({ playerName, roomId }) {
 
   // 🔹 Interrupt opponent
   const sendInterrupt = (type) => {
+    // Check cooldown
+    if (type === "earthquake" && earthquakeCooldown) return;
+    if (type === "teleport" && teleportCooldown) return;
+    
     try {
       console.log("Sending interrupt:", type, "by:", playerId);
       const interruptRef = ref(db, `rooms/${roomId}/gameState/interrupt`);
       update(interruptRef, { type, by: playerId, timestamp: Date.now() });
+      
+      // Set cooldown
+      if (type === "earthquake") {
+        setEarthquakeCooldown(true);
+        setTimeout(() => setEarthquakeCooldown(false), 2000);
+      } else if (type === "teleport") {
+        setTeleportCooldown(true);
+        setTimeout(() => setTeleportCooldown(false), 2000);
+      }
       
       // Play sound only if enabled
       if (soundOn) {
@@ -208,16 +224,15 @@ export default function GameRoom({ playerName, roomId }) {
                     return prev;
                   }
                   
-                  // Generate new random position
-                  const tableWidth = 500;
-                  const stoneWidth = 40;
-                  const minGap = 50;
+                  // Generate new random position (percentage-based)
+                  const stoneSize = 8;
+                  const minGap = 12;
                   let newLeft, newBottom;
                   let tries = 0;
                   
                   do {
-                    newLeft = Math.floor(Math.random() * (tableWidth - stoneWidth - 20)) + 10;
-                    newBottom = 20 + Math.floor(Math.random() * 100);
+                    newLeft = 5 + Math.floor(Math.random() * (85 - stoneSize));
+                    newBottom = 10 + Math.floor(Math.random() * 40);
                     tries++;
                   } while (
                     prev.some((s, idx) => 
@@ -306,31 +321,31 @@ export default function GameRoom({ playerName, roomId }) {
         background: isWinner ? "#2E7D32" : "#C62828", 
         color: "white", 
         minHeight: "100vh", 
-        padding: "30px", 
+        padding: "20px", 
         textAlign: "center",
         fontFamily: "'Segoe UI', Tahoma, Geneva, Verdana, sans-serif"
       }}>
-        <h1 style={{ fontSize: "48px", marginTop: "50px" }}>
+        <h1 style={{ fontSize: "clamp(36px, 10vw, 48px)", marginTop: "30px" }}>
           {isWinner ? "🎉 YOU WIN! 🎉" : "😔 YOU LOSE"}
         </h1>
-        <h2 style={{ fontSize: "36px", marginTop: "30px" }}>
+        <h2 style={{ fontSize: "clamp(28px, 7vw, 36px)", marginTop: "20px" }}>
           {isWinner ? "Congratulations!" : `${winnerName} Wins!`}
         </h2>
         
         <div style={{ 
           background: "rgba(255,255,255,0.2)", 
-          padding: "30px", 
+          padding: "20px", 
           borderRadius: "20px", 
-          margin: "40px auto",
+          margin: "30px auto",
           maxWidth: "400px"
         }}>
-          <h3 style={{ fontSize: "28px", marginBottom: "20px" }}>🏆 Final Scores</h3>
-          <ul style={{ listStyle: "none", padding: 0, fontSize: "24px" }}>
+          <h3 style={{ fontSize: "clamp(22px, 5.5vw, 28px)", marginBottom: "15px" }}>🏆 Final Scores</h3>
+          <ul style={{ listStyle: "none", padding: 0, fontSize: "clamp(18px, 4.5vw, 24px)" }}>
             {Object.entries(scores)
               .sort(([, a], [, b]) => b - a)
               .map(([id, score]) => (
                 <li key={id} style={{ 
-                  marginBottom: "15px",
+                  marginBottom: "12px",
                   fontWeight: id === winnerId ? "bold" : "normal",
                   color: id === winnerId ? "#FFD700" : "white"
                 }}>
@@ -343,9 +358,13 @@ export default function GameRoom({ playerName, roomId }) {
         
         <button
           onClick={() => window.location.reload()}
+          onTouchStart={(e) => {
+            e.preventDefault();
+            window.location.reload();
+          }}
           style={{
-            padding: "15px 40px",
-            fontSize: "20px",
+            padding: "15px 30px",
+            fontSize: "clamp(16px, 4vw, 20px)",
             fontWeight: "bold",
             borderRadius: "12px",
             border: "none",
@@ -354,7 +373,9 @@ export default function GameRoom({ playerName, roomId }) {
             cursor: "pointer",
             boxShadow: "0 4px 8px rgba(0,0,0,0.3)",
             transition: "0.2s",
-            marginTop: "20px"
+            marginTop: "15px",
+            touchAction: "manipulation",
+            WebkitTapHighlightColor: "transparent"
           }}
           onMouseEnter={(e) => e.target.style.transform = "scale(1.1)"}
           onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
@@ -383,27 +404,28 @@ export default function GameRoom({ playerName, roomId }) {
     const otherLevel = otherPlayerData.level ?? 1;
 
     return (
-      <div style={{ background: "#F3E5AB", color:"#4B3621", minHeight:"100vh", padding:"30px", textAlign:"center", fontFamily:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif" }}>
-        <h2 style={{ fontFamily:"'Courier New', Courier, monospace" }}>🪨 Crazy Batu Seremban</h2>
-        <h3>👀 Watching {otherPlayerData.name || "Opponent"}'s Turn</h3>
-        <h4 style={{color:"#D2691E"}}>Level {otherLevel}</h4>
-        <p style={{ fontSize:"14px", color:"#6B4C3B" }}>
+      <div style={{ background: "#F3E5AB", color:"#4B3621", minHeight:"100vh", padding:"15px", textAlign:"center", fontFamily:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", overflow:"hidden" }}>
+        <h2 style={{ fontFamily:"'Courier New', Courier, monospace", fontSize:"clamp(24px, 6vw, 32px)" }}>🪨 Crazy Batu Seremban</h2>
+        <h3 style={{ fontSize:"clamp(18px, 4.5vw, 22px)" }}>👀 Watching {otherPlayerData.name || "Opponent"}'s Turn</h3>
+        <h4 style={{color:"#D2691E", fontSize:"clamp(16px, 4vw, 18px)"}}>Level {otherLevel}</h4>
+        <p style={{ fontSize:"clamp(12px, 3vw, 14px)", color:"#6B4C3B" }}>
           Stones on table: {otherRemaining.length} | In hand: {otherCollected.length}
         </p>
 
         {/* 🔹 Live Game Table */}
         <div style={{ 
-          margin: "40px auto", 
-          width: "500px", 
-          height: "200px", 
+          margin: "20px auto", 
+          width: "min(90vw, 500px)", 
+          height: "min(40vw, 200px)", 
           background: "#8B4513", 
           borderRadius: "20px", 
           position: "relative", 
           boxShadow: "0 10px 40px rgba(0,0,0,0.5)", 
           border: "5px solid #A0522D",
+          touchAction:"manipulation"
         }}>
           {otherRemaining.map((id) => {
-            const pos = otherPositions.find(s => s?.id === id) || { left: 50 + id * 80, baseBottom: 40 };
+            const pos = otherPositions.find(s => s?.id === id) || { left: 5 + id * 18, baseBottom: 10 + (id * 8) };
             const isPicked = otherPicked.includes(id);
             
             return (
@@ -412,19 +434,21 @@ export default function GameRoom({ playerName, roomId }) {
                 style={{
                   position: "absolute",
                   bottom: otherAir === id 
-                    ? (otherIsFalling ? `${pos.baseBottom}px` : "130px")
-                    : `${pos.baseBottom}px`,
-                  left: `${pos.left}px`,
-                  width: "40px",
-                  height: "40px",
+                    ? (otherIsFalling ? `${pos.baseBottom}%` : "65%")
+                    : `${pos.baseBottom}%`,
+                  left: `${pos.left}%`,
+                  width: "clamp(30px, 8vw, 40px)",
+                  height: "clamp(30px, 8vw, 40px)",
                   display: "flex",
                   alignItems: "center",
                   justifyContent: "center",
-                  fontSize: "24px",
+                  fontSize: "clamp(18px, 5vw, 24px)",
                   borderRadius: "50%",
                   backgroundColor: otherAir === id ? "orange" : isPicked ? "gold" : stoneStyle.color,
                   transition: "bottom 0.75s ease",
                   boxShadow: isPicked ? "0 0 10px gold" : "none",
+                  userSelect:"none",
+                  WebkitUserSelect:"none"
                 }}
               >
                 {stoneStyle.emoji}
@@ -437,11 +461,13 @@ export default function GameRoom({ playerName, roomId }) {
             <div
               style={{
                 position: "absolute",
-                bottom: "170px",
+                bottom: "85%",
                 left: "50%",
                 transform: "translateX(-50%)",
-                fontSize: "50px",
+                fontSize: "clamp(40px, 10vw, 50px)",
                 opacity: 0.9,
+                userSelect:"none",
+                WebkitUserSelect:"none"
               }}
             >
               ✋
@@ -450,50 +476,70 @@ export default function GameRoom({ playerName, roomId }) {
         </div>
 
         {/* 🔹 Interrupt buttons */}
-        <div style={{ marginTop:"30px", display:"flex", gap:"10px", justifyContent:"center", flexWrap:"wrap" }}>
+        <div style={{ marginTop:"20px", display:"flex", gap:"10px", justifyContent:"center", flexWrap:"wrap", padding:"0 10px" }}>
           <button 
             onClick={() => sendInterrupt("earthquake")}
+            onTouchStart={(e)=>{
+              e.preventDefault();
+              sendInterrupt("earthquake");
+            }}
+            disabled={earthquakeCooldown}
             style={{
-              padding:"12px 24px",
-              cursor:"pointer",
+              padding:"12px 20px",
+              cursor: earthquakeCooldown ? "not-allowed" : "pointer",
               borderRadius:"12px",
               border:"none",
-              background:"#8B0000",
+              background: earthquakeCooldown ? "#555" : "#8B0000",
               color:"#fff",
-              fontSize:"16px",
+              fontSize:"clamp(14px, 3.5vw, 16px)",
               fontWeight:"bold",
               boxShadow:"0 4px 8px rgba(0,0,0,0.3)",
-              transition:"0.2s"
+              transition:"0.2s",
+              flex:"1 1 auto",
+              minWidth:"120px",
+              touchAction:"manipulation",
+              WebkitTapHighlightColor:"transparent",
+              opacity: earthquakeCooldown ? 0.5 : 1
             }}
-            onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
+            onMouseEnter={(e) => !earthquakeCooldown && (e.target.style.transform = "scale(1.05)")}
             onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
           >
-            🌋 EARTHQUAKE
+            {earthquakeCooldown ? "⏳ Wait..." : "🌋 EARTHQUAKE"}
           </button>
           <button 
             onClick={() => sendInterrupt("teleport")}
+            onTouchStart={(e)=>{
+              e.preventDefault();
+              sendInterrupt("teleport");
+            }}
+            disabled={teleportCooldown}
             style={{
-              padding:"12px 24px",
-              cursor:"pointer",
+              padding:"12px 20px",
+              cursor: teleportCooldown ? "not-allowed" : "pointer",
               borderRadius:"12px",
               border:"none",
-              background:"#9370DB",
+              background: teleportCooldown ? "#555" : "#9370DB",
               color:"#fff",
-              fontSize:"16px",
+              fontSize:"clamp(14px, 3.5vw, 16px)",
               fontWeight:"bold",
               boxShadow:"0 4px 8px rgba(0,0,0,0.3)",
-              transition:"0.2s"
+              transition:"0.2s",
+              flex:"1 1 auto",
+              minWidth:"120px",
+              touchAction:"manipulation",
+              WebkitTapHighlightColor:"transparent",
+              opacity: teleportCooldown ? 0.5 : 1
             }}
-            onMouseEnter={(e) => e.target.style.transform = "scale(1.05)"}
+            onMouseEnter={(e) => !teleportCooldown && (e.target.style.transform = "scale(1.05)")}
             onMouseLeave={(e) => e.target.style.transform = "scale(1)"}
           >
-            ✨ TELEPORT
+            {teleportCooldown ? "⏳ Wait..." : "✨ TELEPORT"}
           </button>
         </div>
 
         {/* 🔹 Scores */}
-        <h3 style={{marginTop:"40px"}}>🏆 Scores</h3>
-        <ul style={{listStyle:"none", padding:0, fontSize:"18px"}}>
+        <h3 style={{marginTop:"20px", fontSize:"clamp(18px, 4.5vw, 22px)"}}>🏆 Scores</h3>
+        <ul style={{listStyle:"none", padding:0, fontSize:"clamp(14px, 3.5vw, 18px)"}}>
           {Object.entries(scores).map(([id,score])=>(
             <li key={id} style={{marginBottom:"8px"}}>
               {id===playerId?`${playerName} (You)`:players[id]?.name||id} : {score}
@@ -603,36 +649,51 @@ export default function GameRoom({ playerName, roomId }) {
       background: fail?"#7B241C":"#F3E5AB", 
       color:"#4B3621", 
       minHeight:"100vh", 
-      padding:"30px", 
+      padding:"15px", 
       textAlign:"center", 
       fontFamily:"'Segoe UI', Tahoma, Geneva, Verdana, sans-serif", 
       transition:"0.2s", 
       position:"relative",
-      animation: interruptEffect === "earthquake" ? "earthquake 0.5s" : "none"
+      animation: interruptEffect === "earthquake" ? "earthquake 0.5s" : "none",
+      overflow:"hidden"
     }}>
 
-      <h2 style={{ fontFamily:"'Courier New', Courier, monospace" }}>🪨 Crazy Batu Seremban</h2>
-      <h3>Level {level} — Pick {required>=0?required:"N/A"}</h3>
-      <h4>{isMyTurn?"🟢 Your Turn":"🔴 Waiting"}</h4>
-      <p style={{ fontSize:"14px", color:"#6B4C3B" }}>Stones on table: {remainingStones.length} | In hand: {collectedStones.length}</p>
+      <h2 style={{ fontFamily:"'Courier New', Courier, monospace", fontSize:"clamp(24px, 6vw, 32px)", marginBottom:"5px" }}>🪨 Crazy Batu Seremban</h2>
+      <h3 style={{ fontSize:"clamp(18px, 4.5vw, 22px)", marginBottom:"5px" }}>Level {level} — Pick {required>=0?required:"N/A"}</h3>
+      <h4 style={{ fontSize:"clamp(16px, 4vw, 18px)" }}>{isMyTurn?"🟢 Your Turn":"🔴 Waiting"}</h4>
+      <p style={{ fontSize:"clamp(12px, 3vw, 14px)", color:"#6B4C3B", marginBottom:"10px" }}>Stones on table: {remainingStones.length} | In hand: {collectedStones.length}</p>
 
-      <button onClick={()=>setSoundOn(prev=>!prev)} style={{padding:"6px 12px",marginBottom:"20px",cursor:"pointer",borderRadius:"8px",border:"none",background:"#D2691E",color:"#fff"}}>
+      <button 
+        onClick={()=>setSoundOn(prev=>!prev)} 
+        style={{
+          padding:"8px 16px",
+          marginBottom:"10px",
+          cursor:"pointer",
+          borderRadius:"8px",
+          border:"none",
+          background:"#D2691E",
+          color:"#fff",
+          fontSize:"clamp(12px, 3vw, 14px)",
+          touchAction:"manipulation",
+          WebkitTapHighlightColor:"transparent"
+        }}>
         {soundOn ? "🔊 Sound On" : "🔇 Sound Off"}
       </button>
 
-      {fail && <h2 style={{ color:"red" }}>FAILED!</h2>}
+      {fail && <h2 style={{ color:"red", fontSize:"clamp(20px, 5vw, 28px)", margin:"10px 0" }}>FAILED!</h2>}
 
       {/* 🔹 Game Table */}
       <div style={{ 
-        margin:"40px auto", 
-        width:"500px", 
-        height:"200px", 
+        margin:"20px auto", 
+        width:"min(90vw, 500px)", 
+        height:"min(40vw, 200px)", 
         background:"#8B4513", 
         borderRadius:"20px", 
         position:"relative", 
         boxShadow:"0 10px 40px rgba(0,0,0,0.5)", 
         border:"5px solid #A0522D",
-        animation: interruptEffect === "earthquake" ? "tableShake 0.5s" : "none"
+        animation: interruptEffect === "earthquake" ? "tableShake 0.5s" : "none",
+        touchAction:"manipulation"
       }}>
         {remainingStones.map(id=>{
           const pos = stonePositions.find(s=>s.id===id); if(!pos) return null;
@@ -641,26 +702,36 @@ export default function GameRoom({ playerName, roomId }) {
             <div
               key={id}
               onClick={()=> required>=0 && isMyTurn ? airStone===null?throwStone(id):pickStone(id):null }
+              onTouchStart={(e)=> {
+                e.preventDefault();
+                if(required>=0 && isMyTurn) {
+                  airStone===null?throwStone(id):pickStone(id);
+                }
+              }}
               style={{
                 position:"absolute",
                 bottom: airStone === id
                   ? isFalling
-                    ? `${pos.baseBottom}px`
-                    : "130px"
-                  : `${pos.baseBottom}px`,
-                left:`${pos.left}px`,
-                width:"40px",
-                height:"40px",
+                    ? `${pos.baseBottom}%`
+                    : "65%"
+                  : `${pos.baseBottom}%`,
+                left:`${pos.left}%`,
+                width:"clamp(30px, 8vw, 40px)",
+                height:"clamp(30px, 8vw, 40px)",
                 display:"flex",
                 alignItems:"center",
                 justifyContent:"center",
-                fontSize:"24px",
+                fontSize:"clamp(18px, 5vw, 24px)",
                 cursor:isMyTurn && required>=0?"pointer":"default",
                 borderRadius:"50%",
                 backgroundColor: airStone === id ? "orange" : pickedGroup.includes(id) ? "gold" : stoneStyle.color,
                 transition: isTeleporting ? "opacity 0.25s ease" : "bottom 0.75s ease",
                 opacity: isTeleporting ? 0 : 1,
                 boxShadow: pickedGroup.includes(id) ? "0 0 10px gold" : isTeleporting ? "0 0 20px purple" : "none",
+                touchAction:"manipulation",
+                WebkitTapHighlightColor:"transparent",
+                userSelect:"none",
+                WebkitUserSelect:"none"
               }}
             >
               {stoneStyle.emoji}
@@ -670,7 +741,25 @@ export default function GameRoom({ playerName, roomId }) {
 
         {/* ✋ Hand to catch airStone */}
         {airStone !== null && (
-          <div onClick={catchStone} style={{ position:"absolute", bottom:"170px", left:"50%", transform:"translateX(-50%)", fontSize:"50px", cursor:"pointer", transition:"0.2s" }}>
+          <div 
+            onClick={catchStone}
+            onTouchStart={(e)=>{
+              e.preventDefault();
+              catchStone();
+            }}
+            style={{ 
+              position:"absolute", 
+              bottom:"85%", 
+              left:"50%", 
+              transform:"translateX(-50%)", 
+              fontSize:"clamp(40px, 10vw, 50px)", 
+              cursor:"pointer", 
+              transition:"0.2s",
+              touchAction:"manipulation",
+              WebkitTapHighlightColor:"transparent",
+              userSelect:"none",
+              WebkitUserSelect:"none"
+            }}>
             ✋
           </div>
         )}
@@ -689,9 +778,9 @@ export default function GameRoom({ playerName, roomId }) {
       </div>
 
       {/* 🔹 Scores */}
-      <h3>🏆 Scores</h3>
-      <ul style={{listStyle:"none", padding:0}}>
-        {Object.entries(scores).map(([id,score])=>(<li key={id}>{id===playerId?playerName:players[id]?.name||id} : {score}</li>))}
+      <h3 style={{ fontSize:"clamp(18px, 4.5vw, 22px)", marginTop:"20px" }}>🏆 Scores</h3>
+      <ul style={{listStyle:"none", padding:0, fontSize:"clamp(14px, 3.5vw, 16px)"}}>
+        {Object.entries(scores).map(([id,score])=>(<li key={id} style={{marginBottom:"5px"}}>{id===playerId?playerName:players[id]?.name||id} : {score}</li>))}
       </ul>
 
       {/* 🔹 Animations */}
